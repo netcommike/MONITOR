@@ -3,9 +3,9 @@ import telnetlib3
 import re
 import sqlite3
 
+
 # Функция для обновления статуса линии в базе данных
 def update_line_status(line, status):
-    # Подключение к базе данных SQLite
     conn = sqlite3.connect('database1.db')
     cursor = conn.cursor()
 
@@ -19,6 +19,7 @@ def update_line_status(line, status):
     # Сохранение изменений и закрытие соединения
     conn.commit()
     conn.close()
+
 
 # Функция для проверки состояния линий на терминальном сервере
 async def check_terminal_server(host, username, password, first_line, last_line):
@@ -72,6 +73,7 @@ async def check_terminal_server(host, username, password, first_line, last_line)
     except Exception as e:
         print(f"\n===== SERVER: {host} =====\nError while connecting: {e}\n====================================\n")
 
+
 # Функция для парсинга вывода команды с учетом пробелов как разделителей групп
 def parse_line_status(output, first_line, last_line):
     lines = output.split("\n")
@@ -108,10 +110,22 @@ def parse_line_status(output, first_line, last_line):
 
     return parsed_data
 
+
 # Функция для обновления статуса линий в базе данных
 def update_line_status_in_db(parsed_data):
+    conn = sqlite3.connect('database1.db')
+    cursor = conn.cursor()
     for line, status in parsed_data:
-        update_line_status(line, status)
+        cursor.execute("""
+            UPDATE components
+            SET status = ?
+            WHERE line = ?
+        """, (status, line))
+
+    # Сохранение изменений и закрытие соединения
+    conn.commit()
+    conn.close()
+
 
 # Данные для подключения
 username = "admin"
@@ -123,10 +137,17 @@ servers = [
     {"host": "10.40.83.2", "first_line": 34, "last_line": 49},
 ]
 
+
 # Асинхронная функция для проверки всех серверов
-async def main():
-    tasks = [check_terminal_server(server["host"], username, password, server["first_line"], server["last_line"]) for server in servers]
-    await asyncio.gather(*tasks)
+async def check_all_servers():
+    while True:
+        tasks = [check_terminal_server(server["host"], username, password, server["first_line"], server["last_line"])
+                 for server in servers]
+        await asyncio.gather(*tasks)
+
+        # Подождать 30 секунд перед следующей проверкой
+        await asyncio.sleep(30)
+
 
 # Запуск асинхронного цикла
-asyncio.run(main())
+asyncio.run(check_all_servers())
